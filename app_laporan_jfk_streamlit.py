@@ -80,7 +80,6 @@ Total : {rupiah(total_merch)}
 Qty Erlass : {qty_erlass} pcs
 Total : {rupiah(total_erlass)}
 
-Qty Voucher : {rupiah(voucher)}
 
 Total penjualan Erlangga, Suma, Merchandise, Erlass, Voucher :
 {rupiah(total_penjualan)}
