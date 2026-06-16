@@ -376,5 +376,3 @@ Terima kasih
         height=600
     )
 
-    st.code(laporan)
-```
