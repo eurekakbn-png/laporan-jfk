@@ -1,337 +1,93 @@
-# SPESIFIKASI APLIKASI LAPORAN JFK V2.0
 
-## INPUT USER
+import streamlit as st
+import pandas as pd
+import math
 
-User hanya perlu:
+st.set_page_config(page_title='Laporan JFK', layout='wide')
+st.title('📚 Generator Laporan JFK')
 
-1. Upload CSV Transaksi
-2. Klik Generate
+voucher = st.number_input('Voucher Manual', min_value=0, step=1000, value=0)
 
-Tidak perlu upload:
+trx_file = st.file_uploader('Upload CSV Transaksi', type=['csv'])
+master_file = st.file_uploader('Upload Master SKU Vendor', type=['csv'])
 
-* Master SKU
-* Bundling
+def rupiah(x):
+    return f"Rp. {int(math.ceil(x)):,.0f}".replace(',', '.')
 
-karena keduanya tersimpan permanen di repository GitHub.
+if trx_file and master_file:
+    trx = pd.read_csv(trx_file)
+    master = pd.read_csv(master_file)
 
----
+    sku_col = next((c for c in master.columns if 'sku' in c.lower()), None)
+    trx_sku = next((c for c in trx.columns if 'sku' in c.lower()), None)
 
-## FILE REPOSITORY
+    df = trx.copy()
+    if sku_col and trx_sku:
+        df = trx.merge(master, left_on=trx_sku, right_on=sku_col, how='left')
 
-```text
-laporan-jfk/
-│
-├── app_laporan_jfk_streamlit.py
-├── requirements.txt
-├── master_sku.csv
-├── bundling.xlsx
-```
+    df['TOTAL'] = pd.to_numeric(df['Net Sales'], errors='coerce').fillna(0) + pd.to_numeric(df['Tax'], errors='coerce').fillna(0)
 
----
+    payment = df['Payment Method'].astype(str).str.lower()
+    cash = df.loc[payment == 'cash', 'TOTAL'].sum()
+    card = df.loc[payment != 'cash', 'TOTAL'].sum()
 
-## LOGIKA PAYMENT
+    brand_col = next((c for c in df.columns if 'brand' in c.lower()), None)
+    category_col = next((c for c in df.columns if 'category' in c.lower()), None)
 
-### Cash
+    brand = df[brand_col].astype(str) if brand_col else pd.Series('', index=df.index)
+    category = df[category_col].astype(str) if category_col else pd.Series('', index=df.index)
 
-Payment Method = Cash
+    merchandise = df[category.str.contains('1702 MERCHANDISE EDISI ERLANGGA', case=False, na=False)]
+    suma = df[brand.str.contains('suma', case=False, na=False)]
+    erlass = df[brand.str.contains('erlass', case=False, na=False)]
+    erlangga = df.drop(merchandise.index.union(suma.index).union(erlass.index), errors='ignore')
 
-```python
-cash = total(Net Sales + Tax)
-```
+    def calc(x):
+        qty = math.ceil(pd.to_numeric(x['Quantity'], errors='coerce').fillna(0).sum())
+        total = math.ceil(x['TOTAL'].sum())
+        return qty, total
 
-### Card
+    qty_erlangga, total_erlangga = calc(erlangga)
+    qty_suma, total_suma = calc(suma)
+    qty_merch, total_merch = calc(merchandise)
+    qty_erlass, total_erlass = calc(erlass)
 
-Selain Cash
+    transaksi = df['Receipt Number'].nunique()
+    customer = math.ceil(transaksi * 1.2)
 
-```python
-card = total(Net Sales + Tax)
-```
+    total_penjualan = total_erlangga + total_suma + total_merch + total_erlass + voucher
 
----
-
-## LOGIKA VOUCHER
-
-Voucher dihitung otomatis.
-
-### Voucher ERL 100K
-
-Discount Applied:
-
-```text
-Voucher ERL 100K
-```
-
-Nilai voucher:
-
-```text
-100.000
-```
-
-per Receipt Number unik.
-
----
-
-### Voucher KOL 500K JAKFAIR 2026
-
-Discount Applied:
-
-```text
-Voucher KOL 500K JAKFAIR 2026
-```
-
-Nilai voucher:
-
-```text
-500.000
-```
-
-per Receipt Number unik.
-
----
-
-### DISKON CUSTOM Rp.
-
-Discount Applied:
-
-```text
-DISKON CUSTOM Rp.
-```
-
-Kelompokkan berdasarkan Receipt Number.
-
-Jumlahkan kolom Discounts.
-
-Lalu bulatkan ke kelipatan 100.000 terdekat.
-
-Contoh:
-
-```text
-99.999  -> 100.000
-100.001 -> 100.000
-199.999 -> 200.000
-200.001 -> 200.000
-299.999 -> 300.000
-```
-
-Total voucher:
-
-```text
-Voucher ERL
-+
-Voucher KOL
-+
-Voucher Custom
-```
-
----
-
-## LOGIKA KATEGORI
-
-### Merchandise Erlangga
-
-Category:
-
-```text
-1702 MERCHANDISE EDISI ERLANGGA
-```
-
----
-
-### Suma
-
-Brand mengandung:
-
-```text
-SUMA
-```
-
----
-
-### Erlass
-
-Brand mengandung:
-
-```text
-ERLASS
-```
-
----
-
-### Erlangga
-
-Semua item selain:
-
-* Suma
-* Erlass
-* Merchandise Erlangga
-
----
-
-## LOGIKA BUNDLING
-
-Category:
-
-```text
-Bundle_Package
-```
-
-Lookup ke:
-
-```text
-bundling.xlsx
-```
-
-Kolom:
-
-```text
-Items
-```
-
-dipisah dengan:
-
-```text
-,
-```
-
-Setiap item dicocokkan ke:
-
-```text
-master_sku.csv
-```
-
-kemudian dimasukkan ke kategori:
-
-* Erlangga
-* Suma
-* Merchandise
-* Erlass
-
----
-
-## LAPORAN BUNDLING KHUSUS
-
-Tampilkan hanya jika terjual.
-
-### BUNDLING TAS 150K
-
-Hitung:
-
-```text
-Qty Paket
-Total Rupiah
-```
-
----
-
-### BUNDLING TAS ANAK 250K
-
-Hitung:
-
-```text
-Qty Paket
-Total Rupiah
-```
-
----
-
-### BUNDLING TAS REMAJA 250K
-
-Hitung:
-
-```text
-Qty Paket
-Total Rupiah
-```
-
----
-
-Jika qty = 0
-
-JANGAN DITAMPILKAN.
-
----
-
-## TOTAL PENJUALAN
-
-```text
-Erlangga
-+
-Suma
-+
-Merchandise
-+
-Erlass
-+
-Voucher
-```
-
----
-
-## TRANSAKSI
-
-Unique:
-
-```text
-Receipt Number
-```
-
----
-
-## CUSTOMER
-
-```text
-Customer = CEILING(Transaksi x 1.2)
-```
-
----
-
-# FORMAT OUTPUT WHATSAPP
-
-Semangat pagi
-
+    laporan = f'''Semangat pagi
 Bapak Willy ysh,
 Bapak Adriansyah ysh,
 Bapak Sigit ysh,
 
-Berikut kami sampaikan closing Pameran Jakarta Fair Kemayoran hari {tanggal} dengan total penjualan sebagai berikut:
+Berikut kami sampaikan closing Pameran Jakarta Fair Kemayoran dengan total penjualan sebagai berikut:
 
-Cash : Rp. xxx
-Card : Rp. xxx
-Voucher : Rp. xxx
+Cash : {rupiah(cash)}
+Card : {rupiah(card)}
+Voucher : {rupiah(voucher)}
 
-Qty Buku Erlangga : xxx exp
-Total : Rp. xxx
+Qty Buku Erlangga : {qty_erlangga} exp
+Total : {rupiah(total_erlangga)}
 
-Qty Suma : xxx pcs
-Total : Rp. xxx
+Qty Suma : {qty_suma} pcs
+Total : {rupiah(total_suma)}
 
-Qty Merchandise Erlangga : xxx pcs
-Total : Rp. xxx
+Qty Merchandise Erlangga : {qty_merch} pcs
+Total : {rupiah(total_merch)}
 
-Qty Erlass : xxx pcs
-Total : Rp. xxx
+Qty Erlass : {qty_erlass} pcs
+Total : {rupiah(total_erlass)}
 
-{TAMPILKAN HANYA JIKA ADA PENJUALAN BUNDLING}
-
-Penjualan Bundling:
-
-BUNDLING TAS 150K
-Qty : xxx Paket
-Total : Rp. xxx
-
-BUNDLING TAS ANAK 250K
-Qty : xxx Paket
-Total : Rp. xxx
-
-BUNDLING TAS REMAJA 250K
-Qty : xxx Paket
-Total : Rp. xxx
 
 Total penjualan Erlangga, Suma, Merchandise, Erlass, Voucher :
-Rp. xxx
+{rupiah(total_penjualan)}
 
-Transaksi : xxx
-Customer : xxx
+Transaksi : {transaksi}
+Customer : {customer}
 
 Demikian
-Terima kasih
+Terima kasih'''
+
+    st.text_area('Hasil Siap Copy ke WA', laporan, height=500)
