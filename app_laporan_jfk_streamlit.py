@@ -1,85 +1,365 @@
-
+```python
 import streamlit as st
 import pandas as pd
 import math
+from datetime import datetime
 
-st.set_page_config(page_title='Laporan JFK', layout='wide')
-st.title('📚 Generator Laporan JFK')
+st.set_page_config(
+    page_title="Laporan JFK",
+    layout="wide"
+)
 
-voucher = st.number_input('Voucher Manual', min_value=0, step=1000, value=0)
+# =====================================================
+# CONFIG
+# =====================================================
 
-trx_file = st.file_uploader('Upload CSV Transaksi', type=['csv'])
-master_file = st.file_uploader('Upload Master SKU Vendor', type=['csv'])
+MASTER_FILE = "master_sku.csv"
+BUNDLING_FILE = "bundling.xlsx"
+
+SPECIAL_BUNDLES = [
+    "BUNDLING TAS 150K",
+    "BUNDLING TAS ANAK 250K",
+    "BUNDLING TAS REMAJA 250K"
+]
+
+# =====================================================
+# HELPERS
+# =====================================================
 
 def rupiah(x):
-    return f"Rp. {int(math.ceil(x)):,.0f}".replace(',', '.')
+    return f"Rp. {int(round(x)):,.0f}".replace(",", ".")
 
-if trx_file and master_file:
+def safe_numeric(series):
+    return pd.to_numeric(series, errors="coerce").fillna(0)
+
+def bundle_round(discount):
+    return round(discount / 100000) * 100000
+
+# =====================================================
+# LOAD MASTER
+# =====================================================
+
+@st.cache_data
+def load_master():
+    return pd.read_csv(MASTER_FILE)
+
+@st.cache_data
+def load_bundle():
+    return pd.read_excel(BUNDLING_FILE)
+
+# =====================================================
+# APP
+# =====================================================
+
+st.title("📚 Generator Laporan JFK")
+
+trx_file = st.file_uploader(
+    "Upload CSV Transaksi",
+    type=["csv"]
+)
+
+if trx_file:
+
+    master = load_master()
+    bundle_master = load_bundle()
+
     trx = pd.read_csv(trx_file)
-    master = pd.read_csv(master_file)
 
-    sku_col = next((c for c in master.columns if 'sku' in c.lower()), None)
-    trx_sku = next((c for c in trx.columns if 'sku' in c.lower()), None)
+    # ==========================================
+    # TOTAL
+    # ==========================================
 
-    df = trx.copy()
-    if sku_col and trx_sku:
-        df = trx.merge(master, left_on=trx_sku, right_on=sku_col, how='left')
+    trx["TOTAL"] = (
+        safe_numeric(trx["Net Sales"]) +
+        safe_numeric(trx["Tax"])
+    )
 
-    df['TOTAL'] = pd.to_numeric(df['Net Sales'], errors='coerce').fillna(0) + pd.to_numeric(df['Tax'], errors='coerce').fillna(0)
+    # ==========================================
+    # PAYMENT
+    # ==========================================
 
-    payment = df['Payment Method'].astype(str).str.lower()
-    cash = df.loc[payment == 'cash', 'TOTAL'].sum()
-    card = df.loc[payment != 'cash', 'TOTAL'].sum()
+    payment = trx["Payment Method"].astype(str).str.lower()
 
-    brand_col = next((c for c in df.columns if 'brand' in c.lower()), None)
-    category_col = next((c for c in df.columns if 'category' in c.lower()), None)
+    cash = trx.loc[
+        payment == "cash",
+        "TOTAL"
+    ].sum()
 
-    brand = df[brand_col].astype(str) if brand_col else pd.Series('', index=df.index)
-    category = df[category_col].astype(str) if category_col else pd.Series('', index=df.index)
+    card = trx.loc[
+        payment != "cash",
+        "TOTAL"
+    ].sum()
 
-    merchandise = df[category.str.contains('1702 MERCHANDISE EDISI ERLANGGA', case=False, na=False)]
-    suma = df[brand.str.contains('suma', case=False, na=False)]
-    erlass = df[brand.str.contains('erlass', case=False, na=False)]
-    erlangga = df.drop(merchandise.index.union(suma.index).union(erlass.index), errors='ignore')
+    # ==========================================
+    # VOUCHER ERL
+    # ==========================================
 
-    def calc(x):
-        qty = math.ceil(pd.to_numeric(x['Quantity'], errors='coerce').fillna(0).sum())
-        total = math.ceil(x['TOTAL'].sum())
+    voucher_erl = (
+        trx[
+            trx["Discount Applied"]
+            .astype(str)
+            .str.contains(
+                "Voucher ERL 100K",
+                case=False,
+                na=False
+            )
+        ]["Receipt Number"]
+        .nunique()
+        * 100000
+    )
+
+    # ==========================================
+    # VOUCHER KOL
+    # ==========================================
+
+    voucher_kol = (
+        trx[
+            trx["Discount Applied"]
+            .astype(str)
+            .str.contains(
+                "Voucher KOL 500K",
+                case=False,
+                na=False
+            )
+        ]["Receipt Number"]
+        .nunique()
+        * 500000
+    )
+
+    # ==========================================
+    # DISKON CUSTOM
+    # ==========================================
+
+    custom_df = trx[
+        trx["Discount Applied"]
+        .astype(str)
+        .str.contains(
+            "DISKON CUSTOM",
+            case=False,
+            na=False
+        )
+    ].copy()
+
+    voucher_custom = 0
+
+    if len(custom_df) > 0:
+
+        grouped = (
+            custom_df
+            .groupby("Receipt Number")["Discounts"]
+            .sum()
+        )
+
+        voucher_custom = grouped.apply(
+            bundle_round
+        ).sum()
+
+    voucher_total = (
+        voucher_erl +
+        voucher_kol +
+        voucher_custom
+    )
+
+    # ==========================================
+    # MERGE MASTER
+    # ==========================================
+
+    trx = trx.merge(
+        master[
+            [
+                "SKU",
+                "Brand Name",
+                "Category",
+                "Basic - Price"
+            ]
+        ],
+        on="SKU",
+        how="left",
+        suffixes=("", "_MASTER")
+    )
+
+    # ==========================================
+    # CATEGORY
+    # ==========================================
+
+    merchandise = trx[
+        trx["Category_MASTER"]
+        .astype(str)
+        .str.contains(
+            "1702 MERCHANDISE EDISI ERLANGGA",
+            case=False,
+            na=False
+        )
+    ]
+
+    suma = trx[
+        trx["Brand Name"]
+        .astype(str)
+        .str.contains(
+            "SUMA",
+            case=False,
+            na=False
+        )
+    ]
+
+    erlass = trx[
+        trx["Brand Name"]
+        .astype(str)
+        .str.contains(
+            "ERLASS",
+            case=False,
+            na=False
+        )
+    ]
+
+    excluded_idx = (
+        merchandise.index
+        .union(suma.index)
+        .union(erlass.index)
+    )
+
+    erlangga = trx.drop(
+        excluded_idx,
+        errors="ignore"
+    )
+
+    # ==========================================
+    # SUMMARY FUNCTION
+    # ==========================================
+
+    def get_summary(df):
+
+        qty = safe_numeric(
+            df["Quantity"]
+        ).sum()
+
+        total = safe_numeric(
+            df["TOTAL"]
+        ).sum()
+
         return qty, total
 
-    qty_erlangga, total_erlangga = calc(erlangga)
-    qty_suma, total_suma = calc(suma)
-    qty_merch, total_merch = calc(merchandise)
-    qty_erlass, total_erlass = calc(erlass)
+    qty_erlangga, total_erlangga = get_summary(erlangga)
+    qty_suma, total_suma = get_summary(suma)
+    qty_merch, total_merch = get_summary(merchandise)
+    qty_erlass, total_erlass = get_summary(erlass)
 
-    transaksi = df['Receipt Number'].nunique()
-    customer = math.ceil(transaksi * 1.2)
+    # ==========================================
+    # SPECIAL BUNDLE REPORT
+    # ==========================================
 
-    total_penjualan = total_erlangga + total_suma + total_merch + total_erlass + voucher
+    bundle_report = []
 
-    laporan = f'''Semangat pagi
+    for bundle_name in SPECIAL_BUNDLES:
+
+        b = trx[
+            trx["Items"]
+            .astype(str)
+            .str.upper()
+            .eq(bundle_name.upper())
+        ]
+
+        if len(b) > 0:
+
+            qty = safe_numeric(
+                b["Quantity"]
+            ).sum()
+
+            total = safe_numeric(
+                b["TOTAL"]
+            ).sum()
+
+            bundle_report.append({
+                "name": bundle_name,
+                "qty": qty,
+                "total": total
+            })
+
+    # ==========================================
+    # TRANSAKSI
+    # ==========================================
+
+    transaksi = trx[
+        "Receipt Number"
+    ].nunique()
+
+    customer = math.ceil(
+        transaksi * 1.2
+    )
+
+    # ==========================================
+    # DATE
+    # ==========================================
+
+    try:
+
+        tgl = pd.to_datetime(
+            trx["Date"].iloc[0]
+        )
+
+        tanggal_text = tgl.strftime(
+            "%d %B %Y"
+        )
+
+    except:
+
+        tanggal_text = "-"
+
+    # ==========================================
+    # TOTAL PENJUALAN
+    # ==========================================
+
+    total_penjualan = (
+        total_erlangga +
+        total_suma +
+        total_merch +
+        total_erlass +
+        voucher_total
+    )
+
+    # ==========================================
+    # OUTPUT WA
+    # ==========================================
+
+    laporan = f"""
+Semangat pagi
 Bapak Willy ysh,
 Bapak Adriansyah ysh,
 Bapak Sigit ysh,
 
-Berikut kami sampaikan closing Pameran Jakarta Fair Kemayoran dengan total penjualan sebagai berikut:
+Berikut kami sampaikan closing Pameran Jakarta Fair Kemayoran hari {tanggal_text} dengan total penjualan sebagai berikut:
 
 Cash : {rupiah(cash)}
 Card : {rupiah(card)}
-Voucher : {rupiah(voucher)}
+Voucher : {rupiah(voucher_total)}
 
-Qty Buku Erlangga : {qty_erlangga} exp
+Qty Buku Erlangga : {int(qty_erlangga)} exp
 Total : {rupiah(total_erlangga)}
 
-Qty Suma : {qty_suma} pcs
+Qty Suma : {int(qty_suma)} pcs
 Total : {rupiah(total_suma)}
 
-Qty Merchandise Erlangga : {qty_merch} pcs
+Qty Merchandise Erlangga : {int(qty_merch)} pcs
 Total : {rupiah(total_merch)}
 
-Qty Erlass : {qty_erlass} pcs
+Qty Erlass : {int(qty_erlass)} pcs
 Total : {rupiah(total_erlass)}
+"""
 
+    if len(bundle_report) > 0:
+
+        laporan += "\nPenjualan Bundling:\n"
+
+        for item in bundle_report:
+
+            laporan += f"""
+
+{item['name']}
+Qty : {int(item['qty'])} Paket
+Total : {rupiah(item['total'])}
+"""
+
+    laporan += f"""
 
 Total penjualan Erlangga, Suma, Merchandise, Erlass, Voucher :
 {rupiah(total_penjualan)}
@@ -88,6 +368,14 @@ Transaksi : {transaksi}
 Customer : {customer}
 
 Demikian
-Terima kasih'''
+Terima kasih
+"""
 
-    st.text_area('Hasil Siap Copy ke WA', laporan, height=500)
+    st.text_area(
+        "Hasil Siap Copy WhatsApp",
+        laporan,
+        height=600
+    )
+
+    st.code(laporan)
+```
