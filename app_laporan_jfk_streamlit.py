@@ -64,25 +64,86 @@ if trx_file:
     # 1. Hitung TOTAL dasar (Net Sales + Tax) per baris item
     trx["TOTAL_NET"] = safe_numeric(trx["Net Sales"]) + safe_numeric(trx["Tax"])
     
-    # 2. Identifikasi baris yang mengandung Voucher/Diskon Custom spesifik
-    discount_col = trx["Discount Applied"].astype(str)
-    
-    is_voucher_erl = discount_col.str.contains("Voucher ERL 100K", case=False, na=False)
-    is_voucher_kol = discount_col.str.contains("Voucher KOL 500K JAKFAIR 2026", case=False, na=False)
-    is_diskon_custom = discount_col.str.contains("DISKON CUSTOM", case=False, na=False)
-    
-    # Filter hanya diskon target pameran ini
-    is_target_discount = is_voucher_erl | is_voucher_kol | is_diskon_custom
-    
-    # Ambil nilai diskon positifnya (jika di laporan bernilai minus, kita mutlakkan dengan abs())
-    trx["Voucher_Allocated"] = 0.0
-    trx.loc[is_target_discount, "Voucher_Allocated"] = safe_numeric(trx.loc[is_target_discount, "Discounts"]).abs()
+    # ==========================================
+    # VOUCHER MASUK KE OMZET BRAND
+    # ==========================================
 
-    # 3. TOTAL baru = Net + Tax + Nilai Voucher (Mengembalikan omset asli ke item/brand)
-    trx["TOTAL"] = trx["TOTAL_NET"] + trx["Voucher_Allocated"]
+    trx["Voucher_Allocated"] = 0.0
+
+    for receipt, grp in trx.groupby("Receipt Number"):
+
+        voucher_receipt = 0
+
+        discount_text = " ".join(
+            grp["Discount Applied"]
+            .fillna("")
+            .astype(str)
+            .tolist()
+        )
+
+        # Voucher ERL selalu 100.000
+        if "Voucher ERL 100K".lower() in discount_text.lower():
+            voucher_receipt += 100000
+
+        # Voucher KOL selalu 500.000
+        if "Voucher KOL 500K JAKFAIR 2026".lower() in discount_text.lower():
+            voucher_receipt += 500000
+
+        # DISKON CUSTOM
+        custom_rows = grp[
+            grp["Discount Applied"]
+            .astype(str)
+            .str.contains(
+                "DISKON CUSTOM",
+                case=False,
+                na=False
+            )
+        ]
+
+        if len(custom_rows) > 0:
+
+            custom_discount = abs(
+                safe_numeric(
+                    custom_rows["Discounts"]
+                ).sum()
+            )
+
+            custom_voucher = (
+                round(custom_discount / 100000)
+                * 100000
+            )
+
+            voucher_receipt += custom_voucher
+
+        if voucher_receipt > 0:
+
+            total_sales = (
+                safe_numeric(grp["Net Sales"]) +
+                safe_numeric(grp["Tax"])
+            ).sum()
+
+            if total_sales > 0:
+
+                proporsi = (
+                    (
+                        safe_numeric(grp["Net Sales"]) +
+                        safe_numeric(grp["Tax"])
+                    )
+                    / total_sales
+                )
+
+                trx.loc[
+                    grp.index,
+                    "Voucher_Allocated"
+                ] = proporsi * voucher_receipt
+
+    trx["TOTAL"] = (
+        trx["TOTAL_NET"] +
+        trx["Voucher_Allocated"]
+    )
 
     # ==========================================
-    # PAYMENT (Tetap menggunakan TOTAL_NET karena uang kas/kartu yang masuk adalah nilai net)
+    # PAYMENT (Tetap menggunakan TOTAL_NET karena uang asli yang masuk)
     # ==========================================
 
     payment = trx["Payment Method"].astype(str).str.lower()
@@ -138,7 +199,7 @@ if trx_file:
 
     def get_summary(df):
         qty = safe_numeric(df["Quantity"]).sum()
-        total = safe_numeric(df["TOTAL"]).sum()  # Sudah termasuk alokasi voucher di atas
+        total = safe_numeric(df["TOTAL"]).sum()  # Menggunakan TOTAL yang sudah include proporsi voucher
         return qty, total
 
     qty_erlangga, total_erlangga = get_summary(erlangga)
@@ -184,7 +245,7 @@ if trx_file:
     # TOTAL PENJUALAN
     # ==========================================
 
-    # Total penjualan gabungan adalah penjumlahan langsung dari brand yang sudah include voucher
+    # Penjumlahan langsung dari total masing-masing brand yang sudah menyerap nominal voucher
     total_penjualan = total_erlangga + total_suma + total_merch + total_erlass
 
     # ==========================================
@@ -200,7 +261,7 @@ Berikut kami sampaikan closing Pameran Jakarta Fair Kemayoran hari {tanggal_text
 
 Cash : {rupiah(cash)}
 Card : {rupiah(card)}
-Voucher : {rupiah(voucher_total)}
+Voucher (sudah masuk omzet brand) : {rupiah(voucher_total)}
 
 Qty Buku Erlangga : {int(qty_erlangga)} exp
 Total : {rupiah(total_erlangga)}
