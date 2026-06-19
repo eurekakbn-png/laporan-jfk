@@ -261,7 +261,7 @@ Berikut kami sampaikan closing Pameran Jakarta Fair Kemayoran hari {tanggal_text
 
 Cash : {rupiah(cash)}
 Card : {rupiah(card)}
-Voucher (sudah masuk omzet brand) : {rupiah(voucher_total)}
+Voucher : {rupiah(voucher_total)}
 
 Qty Buku Erlangga : {int(qty_erlangga)} exp
 Total : {rupiah(total_erlangga)}
