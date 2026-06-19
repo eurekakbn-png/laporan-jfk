@@ -47,7 +47,7 @@ def load_bundle():
 # APP
 # =====================================================
 
-st.title("📚 Generator Laporan JFK (Updated Voucher Allotment)")
+st.title("📚 Generator Laporan JFK")
 
 trx_file = st.file_uploader(
     "Upload CSV Transaksi",
@@ -184,8 +184,7 @@ if trx_file:
     # TOTAL PENJUALAN
     # ==========================================
 
-    # Karena voucher sudah masuk ke total_erlangga dkk, 
-    # Total penjualan gabungan adalah penjumlahan langsung dari brand.
+    # Total penjualan gabungan adalah penjumlahan langsung dari brand yang sudah include voucher
     total_penjualan = total_erlangga + total_suma + total_merch + total_erlass
 
     # ==========================================
@@ -210,7 +209,7 @@ Qty Suma : {int(qty_suma)} pcs
 Total : {rupiah(total_suma)}
 
 Qty Merchandise Erlangga : {int(qty_merch)} pcs
-Total : {ruplass = rupiah(total_merch)}
+Total : {rupiah(total_merch)}
 
 Qty Erlass : {int(qty_erlass)} pcs
 Total : {rupiah(total_erlass)}
