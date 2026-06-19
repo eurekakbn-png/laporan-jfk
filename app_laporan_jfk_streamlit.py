@@ -64,14 +64,71 @@ if trx_file:
 
     trx = pd.read_csv(trx_file)
 
-    # ==========================================
-    # TOTAL
-    # ==========================================
+# ==========================================
+# TOTAL + VOUCHER MASUK KE OMZET BRAND
+# ==========================================
 
-    trx["TOTAL"] = (
-        safe_numeric(trx["Net Sales"]) +
-        safe_numeric(trx["Tax"])
+trx["VOUCHER_VALUE"] = 0
+
+# Voucher ERL 100K
+mask_erl = trx["Discount Applied"].astype(str).str.contains(
+    "Voucher ERL 100K",
+    case=False,
+    na=False
+)
+
+trx.loc[mask_erl, "VOUCHER_VALUE"] += 100000
+
+# Voucher KOL 500K
+mask_kol = trx["Discount Applied"].astype(str).str.contains(
+    "Voucher KOL 500K",
+    case=False,
+    na=False
+)
+
+trx.loc[mask_kol, "VOUCHER_VALUE"] += 500000
+
+# DISKON CUSTOM
+custom_df = trx[
+    trx["Discount Applied"]
+    .astype(str)
+    .str.contains(
+        "DISKON CUSTOM",
+        case=False,
+        na=False
     )
+]
+
+if len(custom_df) > 0:
+
+    for receipt, grp in custom_df.groupby("Receipt Number"):
+
+        voucher = round(
+            safe_numeric(grp["Discounts"]).sum() / 100000
+        ) * 100000
+
+        total_sales = safe_numeric(
+            grp["Net Sales"]
+        ).sum()
+
+        if total_sales > 0:
+
+            proporsi = (
+                safe_numeric(grp["Net Sales"])
+                / total_sales
+            )
+
+            trx.loc[
+                grp.index,
+                "VOUCHER_VALUE"
+            ] += proporsi * voucher
+
+trx["TOTAL"] = (
+    safe_numeric(trx["Net Sales"]) +
+    safe_numeric(trx["Tax"]) +
+    safe_numeric(trx["VOUCHER_VALUE"])
+)
+
 
     # ==========================================
     # PAYMENT
@@ -308,13 +365,12 @@ if trx_file:
     # TOTAL PENJUALAN
     # ==========================================
 
-    total_penjualan = (
-        total_erlangga +
-        total_suma +
-        total_merch +
-        total_erlass +
-        voucher_total
-    )
+total_penjualan = (
+    total_erlangga +
+    total_suma +
+    total_merch +
+    total_erlass
+)
 
     # ==========================================
     # OUTPUT WA
@@ -330,7 +386,7 @@ Berikut kami sampaikan closing Pameran Jakarta Fair Kemayoran hari {tanggal_text
 
 Cash : {rupiah(cash)}
 Card : {rupiah(card)}
-Voucher : {rupiah(voucher_total)}
+Voucher (sudah masuk omzet brand) : {rupiah(voucher_total)}
 
 Qty Buku Erlangga : {int(qty_erlangga)} exp
 Total : {rupiah(total_erlangga)}
