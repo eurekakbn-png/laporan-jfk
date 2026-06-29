@@ -193,7 +193,7 @@ if trx_file:
     twomedison = trx[
         trx["Brand Name"]
         .astype(str)
-        .str.contains("2MEDISON", case=False, na=False)
+        .str.contains("2MADISON", case=False, na=False)
     ]
 
     # Gabungkan index pengecualian agar tidak terhitung ganda di Erlangga Utama
@@ -282,7 +282,7 @@ Total : {rupiah(total_merch)}
 Qty Erlass : {int(qty_erlass)} pcs
 Total : {rupiah(total_erlass)}
 
-Qty 2medison : {int(qty_twomedison)} pcs
+Qty 2MADISON : {int(qty_twomedison)} pcs
 Total : {rupiah(total_twomedison)}
 """
 
@@ -296,7 +296,7 @@ Total : {rupiah(item['total'])}
 """
 
     laporan += f"""
-Total penjualan Erlangga, Suma, Merchandise, Erlass, 2medison :
+Total penjualan Erlangga, Suma, Merchandise, Erlass, 2MADISON :
 {rupiah(total_penjualan)}
 
 Transaksi : {transaksi}
