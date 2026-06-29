@@ -1,7 +1,65 @@
-master = load_master()
-bundle_master = load_bundle()
-    
-trx = pd.read_csv(trx_file)
+import streamlit as st
+import pandas as pd
+import math
+from datetime import datetime
+
+st.set_page_config(
+    page_title="Laporan JFK",
+    layout="wide"
+)
+
+# =====================================================
+# CONFIG
+# =====================================================
+
+MASTER_FILE = "master_sku.csv"
+BUNDLING_FILE = "bundling.xlsx"
+
+SPECIAL_BUNDLES = [
+    "BUNDLING TAS 150K",
+    "BUNDLING TAS ANAK 250K",
+    "BUNDLING TAS REMAJA 250K"
+]
+
+# =====================================================
+# HELPERS
+# =====================================================
+
+def rupiah(x):
+    return f"Rp. {int(round(x)):,.0f}".replace(",", ".")
+
+def safe_numeric(series):
+    return pd.to_numeric(series, errors="coerce").fillna(0)
+
+# =====================================================
+# LOAD MASTER
+# =====================================================
+
+@st.cache_data
+def load_master():
+    return pd.read_csv(MASTER_FILE)
+
+@st.cache_data
+def load_bundle():
+    return pd.read_excel(BUNDLING_FILE)
+
+# =====================================================
+# APP
+# =====================================================
+
+st.title("📚 Generator Laporan JFK")
+
+trx_file = st.file_uploader(
+    "Upload CSV Transaksi",
+    type=["csv"]
+)
+
+if trx_file:
+
+    master = load_master()
+    bundle_master = load_bundle()
+
+    trx = pd.read_csv(trx_file)
 
     # 1. Hitung TOTAL dasar (Net Sales + Tax) per baris item
     trx["TOTAL_NET"] = safe_numeric(trx["Net Sales"]) + safe_numeric(trx["Tax"])
@@ -132,14 +190,13 @@ trx = pd.read_csv(trx_file)
         .str.contains("ERLASS", case=False, na=False)
     ]
 
-    # Tambahan brand 2medison
     twomedison = trx[
         trx["Brand Name"]
         .astype(str)
         .str.contains("2MEDISON", case=False, na=False)
     ]
 
-    # Masukkan twomedison.index ke dalam pengecualian agar tidak terhitung ganda di Erlangga
+    # Gabungkan index pengecualian agar tidak terhitung ganda di Erlangga Utama
     excluded_idx = merchandise.index.union(suma.index).union(erlass.index).union(twomedison.index)
     erlangga = trx.drop(excluded_idx, errors="ignore")
 
@@ -149,15 +206,13 @@ trx = pd.read_csv(trx_file)
 
     def get_summary(df):
         qty = safe_numeric(df["Quantity"]).sum()
-        total = safe_numeric(df["TOTAL"]).sum()  # Menggunakan TOTAL yang sudah include proporsi voucher
+        total = safe_numeric(df["TOTAL"]).sum()
         return qty, total
 
     qty_erlangga, total_erlangga = get_summary(erlangga)
     qty_suma, total_suma = get_summary(suma)
     qty_merch, total_merch = get_summary(merchandise)
     qty_erlass, total_erlass = get_summary(erlass)
-    
-    # Hitung nilai summary untuk 2medison
     qty_twomedison, total_twomedison = get_summary(twomedison)
 
     # ==========================================
@@ -198,7 +253,6 @@ trx = pd.read_csv(trx_file)
     # TOTAL PENJUALAN
     # ==========================================
 
-    # Menggabungkan seluruh total pendapatan brand pameran
     total_penjualan = total_erlangga + total_suma + total_merch + total_erlass + total_twomedison
 
     # ==========================================
