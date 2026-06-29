@@ -189,18 +189,24 @@ if trx_file:
         .astype(str)
         .str.contains("ERLASS", case=False, na=False)
     ]
-madison = trx[
-    trx["Brand Name"]
-    .astype(str)
-    .str.contains("2MADISON", case=False, na=False)
-]
-excluded_idx = (
-    merchandise.index
-    .union(suma.index)
-    .union(erlass.index)
-    .union(madison.index)
-)
-    erlangga = trx.drop(excluded_idx, errors="ignore")
+
+    madison = trx[
+        trx["Brand Name"]
+        .astype(str)
+        .str.contains("2MADISON", case=False, na=False)
+    ]
+
+    excluded_idx = (
+        merchandise.index
+        .union(suma.index)
+        .union(erlass.index)
+        .union(madison.index)
+    )
+
+    erlangga = trx.drop(
+        excluded_idx,
+        errors="ignore"
+    )
 
     # ==========================================
     # SUMMARY FUNCTION
