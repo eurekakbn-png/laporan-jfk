@@ -194,7 +194,7 @@ madison = trx[
     .astype(str)
     .str.contains("2MADISON", case=False, na=False)
 ]
-    excluded_idx = (
+excluded_idx = (
     merchandise.index
     .union(suma.index)
     .union(erlass.index)
