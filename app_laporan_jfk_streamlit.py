@@ -274,7 +274,7 @@ if trx_file:
     # OUTPUT WA
     # ==========================================
 
-    laporan = f"""Semangat pagi
+laporan = f"""Semangat pagi
 Bapak Willy ysh,
 Bapak Adriansyah ysh,
 Bapak Sigit ysh,
@@ -296,6 +296,9 @@ Total : {rupiah(total_merch)}
 
 Qty Erlass : {int(qty_erlass)} pcs
 Total : {rupiah(total_erlass)}
+
+Qty 2MADISON : {int(qty_madison)} pcs
+Total : {rupiah(total_madison)}
 """
 Qty 2MADISON : {int(qty_madison)} pcs
 Total : {rupiah(total_madison)}
