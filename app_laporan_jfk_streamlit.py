@@ -1,7 +1,7 @@
 master = load_master()
 bundle_master = load_bundle()
     
-    trx = pd.read_csv(trx_file)
+trx = pd.read_csv(trx_file)
 
     # 1. Hitung TOTAL dasar (Net Sales + Tax) per baris item
     trx["TOTAL_NET"] = safe_numeric(trx["Net Sales"]) + safe_numeric(trx["Tax"])
