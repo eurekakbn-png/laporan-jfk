@@ -189,8 +189,17 @@ if trx_file:
         .astype(str)
         .str.contains("ERLASS", case=False, na=False)
     ]
-
-    excluded_idx = merchandise.index.union(suma.index).union(erlass.index)
+madison = trx[
+    trx["Brand Name"]
+    .astype(str)
+    .str.contains("2MADISON", case=False, na=False)
+]
+    excluded_idx = (
+    merchandise.index
+    .union(suma.index)
+    .union(erlass.index)
+    .union(madison.index)
+)
     erlangga = trx.drop(excluded_idx, errors="ignore")
 
     # ==========================================
@@ -202,10 +211,11 @@ if trx_file:
         total = safe_numeric(df["TOTAL"]).sum()  # Menggunakan TOTAL yang sudah include proporsi voucher
         return qty, total
 
-    qty_erlangga, total_erlangga = get_summary(erlangga)
-    qty_suma, total_suma = get_summary(suma)
-    qty_merch, total_merch = get_summary(merchandise)
-    qty_erlass, total_erlass = get_summary(erlass)
+qty_erlangga, total_erlangga = get_summary(erlangga)
+qty_suma, total_suma = get_summary(suma)
+qty_merch, total_merch = get_summary(merchandise)
+qty_erlass, total_erlass = get_summary(erlass)
+qty_madison, total_madison = get_summary(madison)
 
     # ==========================================
     # SPECIAL BUNDLE REPORT
@@ -246,7 +256,13 @@ if trx_file:
     # ==========================================
 
     # Penjumlahan langsung dari total masing-masing brand yang sudah menyerap nominal voucher
-    total_penjualan = total_erlangga + total_suma + total_merch + total_erlass
+    total_penjualan = (
+    total_erlangga +
+    total_suma +
+    total_merch +
+    total_erlass +
+    total_madison
+)
 
     # ==========================================
     # OUTPUT WA
@@ -275,7 +291,8 @@ Total : {rupiah(total_merch)}
 Qty Erlass : {int(qty_erlass)} pcs
 Total : {rupiah(total_erlass)}
 """
-
+Qty 2MADISON : {int(qty_madison)} pcs
+Total : {rupiah(total_madison)}
     if len(bundle_report) > 0:
         laporan += "\nPenjualan Bundling:\n"
         for item in bundle_report:
@@ -286,7 +303,7 @@ Total : {rupiah(item['total'])}
 """
 
     laporan += f"""
-Total penjualan Erlangga, Suma, Merchandise, Erlass :
+Total penjualan Erlangga, Suma, Merchandise, Erlass, 2MADISON :
 {rupiah(total_penjualan)}
 
 Transaksi : {transaksi}
