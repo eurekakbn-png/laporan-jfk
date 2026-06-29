@@ -155,7 +155,7 @@ if trx_file:
     # VOUCHER SUMMARY (Untuk tampilan Summary WA)
     # ==========================================
     
-    voucher_total = trx["Voucher_Allocated"].sum()
+    voucher_total = round(trx["Voucher_Allocated"].sum())
 
     # ==========================================
     # MERGE MASTER
