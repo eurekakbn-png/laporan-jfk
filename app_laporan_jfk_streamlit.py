@@ -214,14 +214,14 @@ if trx_file:
 
     def get_summary(df):
         qty = safe_numeric(df["Quantity"]).sum()
-        total = safe_numeric(df["TOTAL"]).sum()  # Menggunakan TOTAL yang sudah include proporsi voucher
+        total = safe_numeric(df["TOTAL"]).sum()
         return qty, total
 
-qty_erlangga, total_erlangga = get_summary(erlangga)
-qty_suma, total_suma = get_summary(suma)
-qty_merch, total_merch = get_summary(merchandise)
-qty_erlass, total_erlass = get_summary(erlass)
-qty_madison, total_madison = get_summary(madison)
+    qty_erlangga, total_erlangga = get_summary(erlangga)
+    qty_suma, total_suma = get_summary(suma)
+    qty_merch, total_merch = get_summary(merchandise)
+    qty_erlass, total_erlass = get_summary(erlass)
+    qty_madison, total_madison = get_summary(madison)
 
     # ==========================================
     # SPECIAL BUNDLE REPORT
